@@ -1,0 +1,158 @@
+{
+  "title": "Enphase IQ Battery Local Control",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to your IQ Gateway",
+        "description": "Choose Automatic to obtain a local gateway JWT using your Enphase login, or Manual to paste a token. Automatic requires the email and password each time you submit. Leave Remember credentials off to save only the JWT; turn it on to store your Enphase login in Home Assistant configuration for renewal. Stored credentials are included in Home Assistant backups. Accounts requiring MFA or browser sign-in should use Manual. A new or changed gateway certificate requires your trust confirmation before authentication.",
+        "data": {
+          "host": "Gateway host or IP address",
+          "token": "Gateway JWT (manual only; blank keeps the existing token)",
+          "auth_method": "Token source",
+          "username": "Enphase account email (automatic only)",
+          "password": "Enphase account password (automatic only)",
+          "remember_credentials": "Remember credentials for automatic renewal"
+        },
+        "data_description": {
+          "remember_credentials": "Optional. Saves your Enphase login for renewal; default off for a new setup. Leave off to save only the JWT.",
+          "token": "Get a manual token at https://entrez.enphaseenergy.com/ if automatic sign-in is unavailable."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Replace gateway token",
+        "description": "Choose Automatic to obtain a local gateway JWT using your Enphase login, or Manual to paste a token. Automatic requires the email and password each time you submit. Leave Remember credentials off to save only the JWT; turn it on to store your Enphase login in Home Assistant configuration for renewal. Stored credentials are included in Home Assistant backups. Accounts requiring MFA or browser sign-in should use Manual. A new or changed gateway certificate requires your trust confirmation before authentication. Manual mode forgets any previously remembered login. The gateway serial must still match this integration.",
+        "data": {
+          "token": "Gateway JWT (manual only; blank keeps the existing token)",
+          "auth_method": "Token source",
+          "username": "Enphase account email (automatic only)",
+          "password": "Enphase account password (automatic only)",
+          "remember_credentials": "Remember credentials for automatic renewal"
+        },
+        "data_description": {
+          "remember_credentials": "Optional. Saves your Enphase login for renewal; default off for a new setup. Leave off to save only the JWT.",
+          "token": "Get a manual token at https://entrez.enphaseenergy.com/ if automatic sign-in is unavailable."
+        }
+      },
+      "reconfigure": {
+        "title": "Update gateway connection",
+        "description": "Choose Automatic to obtain a local gateway JWT using your Enphase login, or Manual to paste a token. Automatic requires the email and password each time you submit. Leave Remember credentials off to save only the JWT; turn it on to store your Enphase login in Home Assistant configuration for renewal. Stored credentials are included in Home Assistant backups. Accounts requiring MFA or browser sign-in should use Manual. A new or changed gateway certificate requires your trust confirmation before authentication. Manual mode forgets any previously remembered login. The gateway serial must still match this integration.",
+        "data": {
+          "host": "Gateway host or IP address",
+          "token": "Gateway JWT (manual only; blank keeps the existing token)",
+          "auth_method": "Token source",
+          "username": "Enphase account email (automatic only)",
+          "password": "Enphase account password (automatic only)",
+          "remember_credentials": "Remember credentials for automatic renewal"
+        },
+        "data_description": {
+          "remember_credentials": "Optional. Saves your Enphase login for renewal; default off for a new setup. Leave off to save only the JWT.",
+          "token": "Get a manual token at https://entrez.enphaseenergy.com/ if automatic sign-in is unavailable."
+        }
+      },
+      "trust_certificate": {
+        "title": "Trust this gateway",
+        "description": "A certificate was detected at `{host}`. Its names are unverified claims: check the address and advertised serial against your gateway before trusting. Your JWT has not been sent to this certificate.\n\nAdvertised gateway serial: `{serial_hint}`\n\nCertificate subject: `{subject}`\n\nCertificate issuer: `{issuer}`\n\nSHA-256 fingerprint: `{fingerprint}`\n\nConfirm below to remember this certificate and authenticate over a connection pinned to it. A future certificate change will require confirmation again.",
+        "data": {
+          "trust_certificate": "I checked the gateway details and trust this certificate"
+        }
+      },
+      "gateway_serial": {
+        "title": "Identify the IQ Gateway",
+        "description": "The trusted local gateway did not provide a public serial number. Enter the 12-digit serial from its label or Enphase account. The JWT will be checked against the same pinned gateway before anything is saved.",
+        "data": {
+          "serial": "IQ Gateway serial (12 digits)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "The gateway rejected the JWT. Check its expiry and gateway permissions.",
+      "permission_denied": "This token does not have access to the required local endpoints.",
+      "certificate_error": "The gateway TLS certificate could not be read. Check the address and local connection, then try again.",
+      "unsupported_modes": "This gateway reports a different mode mapping. Controls are blocked pending compatibility review.",
+      "invalid_input": "Check the gateway address and authentication fields. Automatic needs an email and password; Manual needs a gateway JWT on first setup.",
+      "cannot_connect": "Could not read the local gateway. Check connectivity and gateway compatibility.",
+      "certificate_changed": "The certificate changed or could not be pinned during validation. Enter the connection details again to detect and review the certificate. No replacement fingerprint was saved.",
+      "trust_required": "Tick the confirmation only after you have checked and trust this gateway.",
+      "cloud_invalid_auth": "Enphase rejected the sign-in request. Check the email and password. If browser verification is needed, choose Manual and enter a gateway token.",
+      "cloud_mfa_required": "Enphase requires browser sign-in or additional verification. Choose Manual and obtain a token at https://entrez.enphaseenergy.com/. Keep MFA enabled.",
+      "cloud_cannot_connect": "Could not connect securely to Enphase for a token. Check internet access and try again, or choose Manual.",
+      "cloud_token_error": "Enphase did not return a current gateway JWT. Check the gateway serial and account access, or obtain a token manually.",
+      "invalid_serial": "Enter the IQ Gateway serial as exactly 12 digits."
+    },
+    "abort": {
+      "already_configured": "This gateway is already configured.",
+      "wrong_gateway": "The supplied connection belongs to a different IQ Gateway.",
+      "reauth_successful": "Gateway token updated.",
+      "reconfigure_successful": "Gateway connection updated.",
+      "trust_required": "Detect the gateway certificate before confirming trust. Restart setup.",
+      "trust_expired": "The gateway or saved connection changed while this confirmation was open. Restart setup to review the current certificate."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Polling settings",
+        "description": "This changes monitoring only. The mode toggles remain on until changed.",
+        "data": {
+          "scan_interval": "Polling interval (seconds, 5–300)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "charge_from_grid": {
+        "name": "Charge from grid"
+      },
+      "discharge_to_grid": {
+        "name": "Discharge to grid"
+      },
+      "zero_net": {
+        "name": "Zero Net"
+      },
+      "restrict_discharge": {
+        "name": "Restrict discharge"
+      }
+    },
+    "sensor": {
+      "operating_mode": {
+        "name": "Operating mode"
+      },
+      "local_override": {
+        "name": "Local override"
+      },
+      "battery_charge": {
+        "name": "Battery charge"
+      },
+      "token_expiry": {
+        "name": "Token expiry"
+      },
+      "mode_support": {
+        "name": "Mode compatibility"
+      }
+    },
+    "button": {
+      "return_to_automatic": {
+        "name": "Return to automatic Enphase control"
+      }
+    }
+  },
+  "issues": {
+    "token_expiring": {
+      "title": "Enphase gateway token expires soon",
+      "description": "The token expiry hint is {expiry}. If Remember credentials is enabled, the integration attempts renewal before expiry and retains the current token if the cloud service is unavailable. Otherwise, use Reconfigure to obtain or enter a replacement. Decoded dates are hints; the gateway validates the token."
+    },
+    "certificate_changed": {
+      "title": "Review the gateway certificate",
+      "description": "The saved gateway certificate could not be verified. Connections are blocked and no replacement is trusted automatically. Use Reconfigure on Enphase IQ Battery Local Control, check the gateway address and advertised serial, and confirm the detected certificate only if you trust it."
+    }
+  },
+  "selector": {
+    "auth_method": {
+      "options": {
+        "automatic": "Automatic — Enphase account login",
+        "manual": "Manual — paste a gateway JWT"
+      }
+    }
+  }
+}

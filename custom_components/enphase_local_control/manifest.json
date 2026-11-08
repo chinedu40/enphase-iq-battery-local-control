@@ -1,0 +1,13 @@
+{
+  "domain": "enphase_local_control",
+  "name": "Enphase IQ Battery Local Control",
+  "categories": ["energy.solar_batteries"],
+  "codeowners": ["@chinedu40"],
+  "config_flow": true,
+  "documentation": "https://github.com/chinedu40/enphase-iq-battery-local-control#readme",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/chinedu40/enphase-iq-battery-local-control/issues",
+  "requirements": [],
+  "version": "0.4.0"
+}
