@@ -15,7 +15,7 @@
         },
         "data_description": {
           "remember_credentials": "Optional. Saves your Enphase login for renewal; default off for a new setup. Leave off to save only the JWT.",
-          "token": "Get a manual token at https://entrez.enphaseenergy.com/ if automatic sign-in is unavailable."
+          "token": "Obtain a manual JWT from the Enphase token portal, linked in the integration documentation."
         }
       },
       "reauth_confirm": {
@@ -30,7 +30,7 @@
         },
         "data_description": {
           "remember_credentials": "Optional. Saves your Enphase login for renewal; default off for a new setup. Leave off to save only the JWT.",
-          "token": "Get a manual token at https://entrez.enphaseenergy.com/ if automatic sign-in is unavailable."
+          "token": "Obtain a manual JWT from the Enphase token portal, linked in the integration documentation."
         }
       },
       "reconfigure": {
@@ -46,7 +46,7 @@
         },
         "data_description": {
           "remember_credentials": "Optional. Saves your Enphase login for renewal; default off for a new setup. Leave off to save only the JWT.",
-          "token": "Get a manual token at https://entrez.enphaseenergy.com/ if automatic sign-in is unavailable."
+          "token": "Obtain a manual JWT from the Enphase token portal, linked in the integration documentation."
         }
       },
       "trust_certificate": {
@@ -74,7 +74,7 @@
       "certificate_changed": "The certificate changed or could not be pinned during validation. Enter the connection details again to detect and review the certificate. No replacement fingerprint was saved.",
       "trust_required": "Tick the confirmation only after you have checked and trust this gateway.",
       "cloud_invalid_auth": "Enphase rejected the sign-in request. Check the email and password. If browser verification is needed, choose Manual and enter a gateway token.",
-      "cloud_mfa_required": "Enphase requires browser sign-in or additional verification. Choose Manual and obtain a token at https://entrez.enphaseenergy.com/. Keep MFA enabled.",
+      "cloud_mfa_required": "Enphase requires browser sign-in or additional verification. Choose Manual and obtain a JWT from the Enphase token portal. Keep MFA enabled.",
       "cloud_cannot_connect": "Could not connect securely to Enphase for a token. Check internet access and try again, or choose Manual.",
       "cloud_token_error": "Enphase did not return a current gateway JWT. Check the gateway serial and account access, or obtain a token manually.",
       "invalid_serial": "Enter the IQ Gateway serial as exactly 12 digits."

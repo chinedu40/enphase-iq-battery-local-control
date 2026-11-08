@@ -6,4 +6,6 @@ The tests cover Home Assistant config entries, entities, and switch services. Th
 
 The release also retains tests for first-use certificate review, pinned TLS, manual and automatic token setup, and opt-in renewal with redacted diagnostics. Setup, renewal, reload, and unload do not issue battery control writes.
 
+Home Assistant 2026.11.0's Marketplace was also exercised in an isolated environment with mocked GitHub metadata and archive downloads. Marketplace detected the repository as an integration, installed the archive into `custom_components/enphase_local_control`, and the Home Assistant loader discovered it.
+
 The mode mapping is based on IQ Gateway observations; other firmware and site configurations may behave differently. This release's validation does not issue live commands, change a live Home Assistant installation, or sign in to a real Enphase account.

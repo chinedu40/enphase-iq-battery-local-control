@@ -8,7 +8,7 @@ A Home Assistant custom integration for controlling an Enphase IQ Battery throug
 
 **Home Assistant 2026.11 or later:** Open **Settings → Marketplace → Add from link** and add `https://github.com/chinedu40/enphase-iq-battery-local-control`. Connect GitHub if prompted, choose **Integration** if asked, and install the repository. This is a custom repository added by link. See the [Marketplace guide](https://www.home-assistant.io/integrations/marketplace/#custom-repositories).
 
-**Home Assistant 2026.10 with HACS:** Open **HACS → ⋮ → Custom repositories**, paste the same repository URL, select **Integration**, and add it. Download the integration and restart Home Assistant when prompted. See the [HACS guide](https://www.hacs.xyz/docs/faq/custom_repositories/).
+**Home Assistant 2026.10.2 or newer in the 2026.10 series, with HACS:** Open **HACS → ⋮ → Custom repositories**, paste the same repository URL, select **Integration**, and add it. Download the integration and restart Home Assistant when prompted. See the [HACS guide](https://www.hacs.xyz/docs/faq/custom_repositories/).
 
 **Manual install:** From the [latest release](https://github.com/chinedu40/enphase-iq-battery-local-control/releases/latest), extract the integration ZIP and copy `custom_components/enphase_local_control` into `/config/custom_components/`. Restart Home Assistant.
 
