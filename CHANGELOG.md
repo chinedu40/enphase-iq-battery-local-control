@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Tolerate IQ Gateway firmware (observed on D8.3.5427) that answers `/ivp/sc/sched` with the malformed status line `HTTP/1.1 0`. A read that hits it falls back once to a minimal pinned-TLS reader for that path; commands are never resent to discover it and are sent exactly once afterwards.
+- Add redacted debug logging for gateway transport failures (`custom_components.enphase_local_control`), so setup errors such as "Could not read the local gateway" can be diagnosed.
+
 ## 0.4.0
 
 First public release of **Enphase IQ Battery Local Control**.

@@ -7,13 +7,17 @@ The caller owns the aiohttp session, command serialization and release policy.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
+import hashlib
 import ipaddress
 import json
+import logging
 import math
 import re
 import ssl
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -22,8 +26,32 @@ from xml.etree import ElementTree
 
 import aiohttp
 
+_LOGGER = logging.getLogger(__name__)
+
 _MAX_RESPONSE_BYTES = 1024 * 1024
 _MAX_JWT_PAYLOAD_BYTES = 16 * 1024
+_MAX_HEADER_BYTES = 64 * 1024
+_CLOSE_TIMEOUT = 1.0
+# Some IQ Gateway firmware (observed on D8.3.5427) answers /ivp/sc/sched with
+# the status line "HTTP/1.1 0" followed by normal headers and a valid body.
+# aiohttp rightly rejects that line, so such paths use a minimal reader instead.
+_STATUS_LINE = re.compile(rb"HTTP/1\.[01] ([0-9]{1,3})(?: [^\r\n]*)?")
+
+
+def _is_bad_status_line(err: BaseException) -> bool:
+    """Recognize aiohttp's parser rejection of a malformed response status line."""
+    return (
+        isinstance(err, aiohttp.ClientResponseError)
+        and "bad status line" in str(err.message).casefold()
+    )
+
+
+def _describe(err: BaseException) -> str:
+    """Summarize an error for debug logs without request headers or credentials."""
+    if isinstance(err, aiohttp.ClientResponseError):
+        # Its repr includes RequestInfo headers, which carry the Authorization token.
+        return f"{type(err).__name__}: status={err.status} message={err.message!r}"
+    return f"{type(err).__name__}: {err}"
 
 
 class EnphaseApiError(Exception):
@@ -180,6 +208,10 @@ class GatewayClient:
         self._base_url = _base_url(host)
         self.replace_token(token)
         self._ssl = _fingerprint(fingerprint)
+        self._pin = self._ssl.fingerprint if self._ssl is not None else None
+        # Paths whose replies carried an unparseable status line. Learned only
+        # from a read, so a command is never resent to discover the quirk.
+        self._raw_paths: set[str] = set()
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
             raise ValueError("The request timeout must be a positive number.")
         if not math.isfinite(timeout) or timeout <= 0:
@@ -200,6 +232,37 @@ class GatewayClient:
         *,
         payload: dict[str, Any] | None = None,
         authenticated: bool = True,
+    ) -> bytes:
+        if path in self._raw_paths:
+            return await self._raw_request(
+                method, path, payload=payload, authenticated=authenticated
+            )
+        try:
+            return await self._aiohttp_request(
+                method, path, payload=payload, authenticated=authenticated
+            )
+        except _BadStatusLine:
+            if method != "GET":
+                # The command may already have been applied. Never resend it;
+                # the controller reconciles by reading the scheduler back.
+                raise CommandError("The gateway acknowledgement could not be read.") from None
+            _LOGGER.debug(
+                "Gateway sent a malformed HTTP status line for %s; "
+                "using the tolerant reader for this path",
+                path,
+            )
+            self._raw_paths.add(path)
+            return await self._raw_request(
+                method, path, payload=payload, authenticated=authenticated
+            )
+
+    async def _aiohttp_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        payload: dict[str, Any] | None,
+        authenticated: bool,
     ) -> bytes:
         try:
             async with self._session.request(
@@ -232,10 +295,91 @@ class GatewayClient:
             aiohttp.ClientConnectorCertificateError,
             aiohttp.ClientConnectorSSLError,
             ssl.SSLError,
-        ):
+        ) as err:
+            _LOGGER.debug("%s %s failed TLS checks: %s", method, path, _describe(err))
             raise CertificateError("The gateway certificate could not be verified.") from None
-        except (TimeoutError, aiohttp.ClientError, OSError):
+        except (TimeoutError, aiohttp.ClientError, OSError) as err:
+            if _is_bad_status_line(err):
+                raise _BadStatusLine from None
+            _LOGGER.debug("%s %s failed: %s", method, path, _describe(err))
             raise CommunicationError("The local gateway did not respond successfully.") from None
+
+    def _raw_ssl_context(self) -> ssl.SSLContext:
+        if self._pin is None:
+            # Same trust policy as aiohttp without a pin: normal verification.
+            return ssl.create_default_context()
+        # Mirror aiohttp.Fingerprint: the pin replaces CA and hostname checks
+        # and is compared below before any request byte is written.
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        return context
+
+    async def _raw_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        payload: dict[str, Any] | None,
+        authenticated: bool,
+    ) -> bytes:
+        """Send one request over a dedicated TLS connection and parse leniently.
+
+        Only the status line is treated leniently: a status of 0 is accepted as
+        success when the gateway also sends a body; callers still validate it.
+        """
+        address = urlsplit(self._base_url)
+        body = b"" if payload is None else json.dumps(payload).encode()
+        lines = [
+            f"{method} {path} HTTP/1.1",
+            f"Host: {address.netloc}",
+            "Accept: application/json, application/xml;q=0.9",
+            "Connection: close",
+        ]
+        if authenticated:
+            lines.append("Authorization: Bearer " + self._token)
+        if payload is not None:
+            lines.append("Content-Type: application/json")
+        if payload is not None or method == "POST":
+            lines.append(f"Content-Length: {len(body)}")
+        request = ("\r\n".join(lines) + "\r\n\r\n").encode() + body
+
+        writer: asyncio.StreamWriter | None = None
+        try:
+            async with asyncio.timeout(self._timeout.total):
+                reader, writer = await asyncio.open_connection(
+                    host=address.hostname,
+                    port=address.port or 443,
+                    ssl=self._raw_ssl_context(),
+                    server_hostname=address.hostname,
+                    limit=_MAX_HEADER_BYTES,
+                    ssl_shutdown_timeout=_CLOSE_TIMEOUT,
+                )
+                if self._pin is not None:
+                    tls = writer.get_extra_info("ssl_object")
+                    der = tls.getpeercert(binary_form=True) if tls is not None else None
+                    if not isinstance(der, bytes) or hashlib.sha256(der).digest() != self._pin:
+                        raise CertificateError("The gateway certificate could not be verified.")
+                writer.write(request)
+                await writer.drain()
+                status, headers = await _read_head(reader)
+                self._check_status(200 if status == 0 else status, method)
+                if status == 0:
+                    _LOGGER.debug("%s %s: accepted HTTP status 0 from the gateway", method, path)
+                return await _read_body(reader, headers)
+        except EnphaseApiError:
+            raise
+        except ssl.SSLError as err:
+            _LOGGER.debug("%s %s failed TLS checks: %s", method, path, _describe(err))
+            raise CertificateError("The gateway certificate could not be verified.") from None
+        except (TimeoutError, OSError, EOFError, asyncio.IncompleteReadError) as err:
+            _LOGGER.debug("%s %s failed: %s", method, path, _describe(err))
+            raise CommunicationError("The local gateway did not respond successfully.") from None
+        except asyncio.LimitOverrunError:
+            raise InvalidResponseError("The gateway response headers were too large.") from None
+        finally:
+            if writer is not None:
+                await _close_writer(writer)
 
     @staticmethod
     def _check_status(status: int, method: str) -> None:
@@ -326,6 +470,81 @@ class GatewayClient:
             model=text_at("device/model", "device/pn", "device/part_number"),
             firmware=text_at("device/software", "device/software_version"),
         )
+
+
+class _BadStatusLine(Exception):
+    """Internal signal: aiohttp could not parse the response status line."""
+
+
+async def _close_writer(writer: asyncio.StreamWriter) -> None:
+    with suppress(Exception):
+        writer.close()
+    with suppress(Exception):
+        async with asyncio.timeout(_CLOSE_TIMEOUT):
+            await writer.wait_closed()
+
+
+async def _read_head(reader: asyncio.StreamReader) -> tuple[int, dict[str, str]]:
+    head = await reader.readuntil(b"\r\n\r\n")
+    if len(head) > _MAX_HEADER_BYTES:
+        raise InvalidResponseError("The gateway response headers were too large.")
+    status_line, *header_lines = head[:-4].split(b"\r\n")
+    match = _STATUS_LINE.fullmatch(status_line)
+    if match is None:
+        raise InvalidResponseError("The gateway returned an unexpected HTTP status.")
+    headers: dict[str, str] = {}
+    for line in header_lines:
+        name, separator, value = line.partition(b":")
+        if not separator or not name.strip():
+            raise InvalidResponseError("The gateway returned malformed HTTP headers.")
+        try:
+            key = name.strip().decode("ascii").casefold()
+            text = value.strip().decode("latin-1")
+        except UnicodeError:
+            raise InvalidResponseError("The gateway returned malformed HTTP headers.") from None
+        headers[key] = f"{headers[key]}, {text}" if key in headers else text
+    return int(match.group(1)), headers
+
+
+async def _read_body(reader: asyncio.StreamReader, headers: dict[str, str]) -> bytes:
+    encoding = headers.get("transfer-encoding", "").casefold()
+    if encoding:
+        if encoding != "chunked":
+            raise InvalidResponseError("The gateway used an unsupported transfer encoding.")
+        return await _read_chunked(reader)
+    length = headers.get("content-length")
+    if length is not None:
+        if not length.isdigit():
+            raise InvalidResponseError("The gateway returned malformed HTTP headers.")
+        size = int(length)
+        if size > _MAX_RESPONSE_BYTES:
+            raise InvalidResponseError("The gateway response was too large.")
+        return await reader.readexactly(size)
+    body = bytearray()
+    while chunk := await reader.read(16 * 1024):
+        body.extend(chunk)
+        if len(body) > _MAX_RESPONSE_BYTES:
+            raise InvalidResponseError("The gateway response was too large.")
+    return bytes(body)
+
+
+async def _read_chunked(reader: asyncio.StreamReader) -> bytes:
+    body = bytearray()
+    while True:
+        size_line = (await reader.readuntil(b"\r\n"))[:-2].split(b";", 1)[0].strip()
+        if not size_line or not re.fullmatch(rb"[0-9a-fA-F]{1,8}", size_line):
+            raise InvalidResponseError("The gateway returned a malformed chunked body.")
+        size = int(size_line, 16)
+        if size == 0:
+            # Discard optional trailers up to the terminating blank line.
+            while await reader.readuntil(b"\r\n") != b"\r\n":
+                pass
+            return bytes(body)
+        if len(body) + size > _MAX_RESPONSE_BYTES:
+            raise InvalidResponseError("The gateway response was too large.")
+        body.extend(await reader.readexactly(size))
+        if await reader.readexactly(2) != b"\r\n":
+            raise InvalidResponseError("The gateway returned a malformed chunked body.")
 
 
 async def async_get_gateway_identity(
